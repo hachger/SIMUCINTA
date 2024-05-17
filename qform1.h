@@ -9,12 +9,9 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QMessageBox>
+#include <QThread>
 
-typedef struct{
-    QTcpSocket *client;
-    uint32_t timeOut;
-} _sMyClientList;
-
+class MyClient;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -39,8 +36,9 @@ private slots:
     void OnQTcpServer1Error();
     void OnQTcpServer1ClientConnect();
 
-    void OnQTcpClientTxData();
-    void OnQTcpClientDisconnected();
+    // void OnQTcpClientTxData();
+    // void OnQTcpClientDisconnected();
+    void OnMyClientDisconnect(QTcpSocket *aClient);
 
     void on_pushButton_clicked();
 
@@ -63,6 +61,40 @@ private:
 
     QTcpServer *QTcpServer1;
     //    QList<QTcpSocket *> MyTCPClientsList;
-    QList<_sMyClientList *> MyTCPClientsList;
+    QList<MyClient *> MyTCPClientsList;
 };
+
+
+class MyClient : public QThread
+{
+    Q_OBJECT
+
+protected:
+    void run();
+public:
+    MyClient(QObject *parent=nullptr, QTcpSocket *clientSocket = nullptr);
+    ~MyClient();
+
+    QHostAddress GetPeerAddress();
+    quint16 GetPeerPort();
+    QTcpSocket *GetClient();
+
+private slots:
+    void OnQTimer();
+    void OnQTcpClientTxData();
+    void OnTcpClientDisconnect();
+signals:
+    void MyClientDisconnect(QTcpSocket *aClient);
+private:
+    uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
+
+    uint8_t rx[256], tx[256];
+    uint8_t header, index, irRead, nBytes, cks, timeout;
+    QTcpSocket *client;
+    QTimer *timer;
+
+    void DecodeCMD();
+
+};
+
 #endif // QFORM1_H

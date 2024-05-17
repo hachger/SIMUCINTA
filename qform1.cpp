@@ -19,6 +19,10 @@ QForm1::QForm1(QWidget *parent)
 
     QPaintBox1 = new QPaintBox(0, 0, ui->widget);
 
+    QTcpServer1 = new QTcpServer(this);
+    connect(QTcpServer1, &QTcpServer::newConnection, this, &QForm1::OnQTcpServer1ClientConnect);
+    connect(QTcpServer1, &QTcpServer::acceptError, this, &QForm1::OnQTcpServer1Error);
+
     unerbus.rx.buf = rx;
     unerbus.rx.maxIndexRingBuf = 255;
     unerbus.tx.buf = tx;
@@ -27,6 +31,8 @@ QForm1::QForm1(QWidget *parent)
     unerbus.WriteUSARTByte = NULL;
 
     UNERBUS_Init(&unerbus);
+
+    QTimer1->start(10);
 
 }
 
@@ -91,71 +97,130 @@ void QForm1::OnQTcpServer1Error()
 
 void QForm1::OnQTcpServer1ClientConnect()
 {
+    QString clientID;
+    MyClient *aux;
 
-    _sMyClientList *aux;
+    // aux->client = QTcpServer1->nextPendingConnection();
 
-    aux = new _sMyClientList;
-
-    aux->client = QTcpServer1->nextPendingConnection();
-    aux->timeOut = 1000;
+    aux = new MyClient(nullptr, QTcpServer1->nextPendingConnection());
 
     MyTCPClientsList.append(aux);
 
+    clientID = MyTCPClientsList.last()->GetPeerAddress().toString() + ":";
+    clientID = clientID +  QString().number(MyTCPClientsList.last()->GetPeerPort(),10);
     //    MyTCPClientsList.append(QTcpServer1->nextPendingConnection());
+    ui->listWidget->addItem(clientID);
+    ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
+
+ //   connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
+//    connect(MyTCPClientsList.last()->client, &QTcpSocket::disconnected, this, &QForm1::OnQTcpClientDisconnected);
+    connect(aux, &MyClient::MyClientDisconnect, this, &QForm1::OnMyClientDisconnect);
 
 
-    //    ui->listWidget->addItem(MyTCPClientsList.last()->peerAddress().toString() + ":" +
-    //                            QString().number(MyTCPClientsList.last()->peerPort(),10));
-
-    connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
-    connect(MyTCPClientsList.last()->client, &QTcpSocket::disconnected, this, &QForm1::OnQTcpClientDisconnected);
 }
 
-void QForm1::OnQTcpClientTxData()
-{
-    QString strhex;
-    quint8 *buf;
-    int Count;
+void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
+    QString clientID;
 
-    QTcpSocket* Client = static_cast<QTcpSocket*>(QObject::sender());
+    clientID = aClient->peerAddress().toString() + ":";
+    clientID = clientID +  QString().number(aClient->peerPort(),10);
 
-    Count = Client->bytesAvailable();
-    if(Count <= 0)
-        return;
-    buf = new quint8[Count];
-
-    Client->read((char *)buf, Count);
-    //    ui->plainTextEdit->appendPlainText("Data -- "+Client->peerAddress().toString()+":"+
-    //                                       QString().number(Client->peerPort(),10)+":"+
-    //                                       QString().number(Count,10));
-
-    strhex="-->  ";
-    for(int i=0; i<Count; i++){
-        if(!iscntrl(buf[i]))
-            strhex = strhex + QString((char)buf[i]);
-        else
-            strhex = strhex + "{" + QString("%1").arg(buf[i],2,16,QChar('0')).toUpper() + "}";
+    for(int i=0; i<ui->listWidget->count(); i++){
+        if(ui->listWidget->item(i)->text() == clientID){
+            delete ui->listWidget->takeItem(i);
+            break;
+        }
     }
-    //    ui->plainTextEdit->appendPlainText(strhex);
 
-    delete [] buf;
-}
+    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+        if(MyTCPClientsList.at(i)->GetPeerAddress()==aClient->peerAddress() &&
+            MyTCPClientsList.at(i)->GetPeerPort()==aClient->peerPort()){
+            MyTCPClientsList.at(i)->terminate();
+            delete MyTCPClientsList.takeAt(i);
+            break;
+        }
+    }
 
-void QForm1::OnQTcpClientDisconnected(){
-    QString clientID, clientOnServer;
+    ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
 
-    QTcpSocket* Client = static_cast<QTcpSocket*>(QObject::sender());
-
-    clientID = Client->peerAddress().toString() + ":" + QString().number(Client->peerPort(), 10);
-    //    ui->plainTextEdit->appendPlainText(clientID + " >> DISCONNECT");
-    //    for(int i=0; i<ui->listWidget->count(); i++){
-    //        if(ui->listWidget->item(i)->text() == clientID){
-    //            delete ui->listWidget->takeItem(i);
-    //            break;
-    //        }
-    //    }
 
 }
+
+// void QForm1::OnQTcpClientTxData()
+// {
+//     // QString strhex;
+//     quint8 *buf;
+//     int Count, i;
+
+//     QTcpSocket* Client = static_cast<QTcpSocket*>(QObject::sender());
+
+//     Count = Client->bytesAvailable();
+//     if(Count <= 0)
+//         return;
+//     buf = new quint8[Count];
+
+//     Client->read((char *)buf, Count);
+//     for (i = 0; i < MyTCPClientsList.count(); ++i) {
+//         if(MyTCPClientsList.at(i)->client->peerAddress()==Client->peerAddress() &&
+//             MyTCPClientsList.at(i)->client->peerPort()==Client->peerPort()){
+//             break;
+//         }
+//     }
+
+//     if(i < MyTCPClientsList.count()){
+//         _sUNERBUSHandle *aux = &MyTCPClientsList.at(i)->unerbus;
+
+//         UNERBUS_ReceiveBuf(aux, buf, Count);
+//         UNERBUS_Task(aux);
+//         if(UNERBUS_IsNewData(aux)){
+//             UNERBUS_ResetNewData(aux);
+//             OnDecodeCMDTCP(MyTCPClientsList.at(i));
+//         }
+//     }
+//     //    ui->plainTextEdit->appendPlainText("Data -- "+Client->peerAddress().toString()+":"+
+//     //                                       QString().number(Client->peerPort(),10)+":"+
+//     //                                       QString().number(Count,10));
+
+//     // strhex="-->  ";
+//     // for(int i=0; i<Count; i++){
+//     //     if(!iscntrl(buf[i]))
+//     //         strhex = strhex + QString((char)buf[i]);
+//     //     else
+//     //         strhex = strhex + "{" + QString("%1").arg(buf[i],2,16,QChar('0')).toUpper() + "}";
+//     // }
+//     //    ui->plainTextEdit->appendPlainText(strhex);
+
+//     delete [] buf;
+// }
+
+// void QForm1::OnQTcpClientDisconnected(){
+//     QString clientID;
+
+//     QTcpSocket* Client = static_cast<QTcpSocket*>(QObject::sender());
+
+//     clientID = Client->peerAddress().toString() + ":";
+//     clientID = clientID +  QString().number(Client->peerPort(),10);
+
+//     for(int i=0; i<ui->listWidget->count(); i++){
+//         if(ui->listWidget->item(i)->text() == clientID){
+//             delete ui->listWidget->takeItem(i);
+//             break;
+//         }
+//     }
+
+//     for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+//         if(MyTCPClientsList.at(i)->client->peerAddress() == Client->peerAddress()){
+//             delete MyTCPClientsList.takeAt(i);
+//             break;
+//         }
+//     }
+
+//     ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
+
+//     // clientID = Client->peerAddress().toString() + ":" + QString().number(Client->peerPort(), 10);
+//     //    ui->plainTextEdit->appendPlainText(clientID + " >> DISCONNECT");
+
+// }
 
 
 void QForm1::on_pushButton_clicked()
@@ -189,16 +254,21 @@ void QForm1::on_pushButton_3_clicked()
     bool ok;
 
     if(QTcpServer1->isListening()){
-        while(MyTCPClientsList.count()){
-            MyTCPClientsList.at(0)->client->close();
-            MyTCPClientsList.removeAt(0);
+        for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+            MyTCPClientsList.at(i)->GetClient()->close();
         }
+        // while((int)MyTCPClientsList.count() != 0){
+        //     MyTCPClientsList.at(0)->client->close();
+        //     delete MyTCPClientsList.takeAt(0);
+        // }
         QTcpServer1->close();
-        ui->pushButton_3->setText("OPEN");
+        MyTCPClientsList.clear();
+        ui->listWidget->clear();
+        ui->pushButton_3->setText("TCP OPEN");
         return;
     }
     else{
-        serverPort = ui->lineEdit->text().toUShort(&ok, 10);
+        serverPort = ui->lineEdit_2->text().toUShort(&ok, 10);
         if(!ok){
             QMessageBox::information(this, "TCP SERVER", "Invalid PORT number.");
             return;
@@ -207,8 +277,149 @@ void QForm1::on_pushButton_3_clicked()
             QMessageBox::information(this, "TCP SERVER", "Can't OPEN SERVER.");
             return;
         }
-        ui->pushButton_3->setText("CLOSE");
+        ui->pushButton_3->setText("TCP CLOSE");
     }
 
 }
 
+
+MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket):QThread(parent)
+{
+    client = clientSocket;
+    irRead = 0;
+    header = 0;
+    this->start(Priority::NormalPriority);
+}
+
+MyClient::~MyClient()
+{
+    this->requestInterruption();
+    this->wait(ULONG_MAX);
+}
+
+QHostAddress MyClient::GetPeerAddress()
+{
+    return client->peerAddress();
+}
+
+quint16 MyClient::GetPeerPort()
+{
+    return client->peerPort();
+}
+
+QTcpSocket *MyClient::GetClient()
+{
+    return client;
+}
+
+void MyClient::run()
+{
+    client->moveToThread(this->thread());
+    connect(client, &QIODevice::readyRead, this, &MyClient::OnQTcpClientTxData);
+    client->moveToThread(this->thread());
+    connect(client, &QTcpSocket::disconnected, this, &MyClient::OnTcpClientDisconnect);
+
+    timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, &MyClient::OnQTimer);
+    timer->start(10);
+
+    exec();
+
+    delete timer;
+}
+
+void MyClient::OnQTimer()
+{
+    if(header){
+        timeout--;
+        if(!timeout)
+            header = 0;
+    }
+}
+
+void MyClient::OnQTcpClientTxData()
+{
+    quint8 *buf;
+    int count;
+
+    count = client->bytesAvailable();
+    if(count <= 0)
+        return;
+    buf = new quint8[count];
+
+    client->read((char *)buf, count);
+    for (int i = 0; i < count; ++i) {
+        switch(header){
+        case 0:
+            if(HEADER[header] == buf[i]){
+                header++;
+                timeout = 10;
+            }
+            break;
+        case 1:
+        case 2:
+        case 3:
+        case 5:
+            if(HEADER[header] == buf[i])
+                header++;
+            else{
+                header = 0;
+                i--;
+            }
+            break;
+        case 4:
+            nBytes = buf[i];
+            cks = 'U' ^ 'N' ^ 'E' ^ 'R' ^ nBytes ^ ':';
+            index = 0;
+            header = 5;
+            break;
+        case 6:
+            nBytes--;
+            if(nBytes){
+                rx[index++] = buf[i];
+                cks ^= buf[i];
+            }
+            else{
+                header = 0;
+                if(cks == buf[i])
+                    DecodeCMD();
+            }
+            break;
+        }
+    }
+}
+
+void MyClient::OnTcpClientDisconnect()
+{
+    emit MyClientDisconnect(client);
+}
+
+void MyClient::DecodeCMD()
+{
+    uint8_t length, cks, i;
+
+    length = 0;
+    switch(rx[0]){
+    case 0xF0:
+        tx[7] = 0x0D;
+        length = 2;
+        break;
+    }
+
+    if(length){
+        HEADER[4] = length + 1;
+        HEADER[6] = rx[0];
+        cks = 0;
+        length += 7;
+
+        for (i = 0; i < length; ++i) {
+            if(i < 7)
+                tx[i] = HEADER[i];
+            cks ^= tx[i];
+        }
+        tx[i] = cks;
+
+        client->write((char *)tx, length);
+    }
+
+}
