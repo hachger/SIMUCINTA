@@ -5,11 +5,11 @@
 #include "qpaintbox.h"
 #include "qserialsetup.h"
 #include <QTimer>
-#include "UNERBUS.h"
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QMessageBox>
 #include <QThread>
+#include <QDebug>
 
 class MyClient;
 
@@ -46,18 +46,22 @@ private slots:
 
     void on_pushButton_3_clicked();
 
+    void on_tableWidget_cellClicked(int row, int column);
+
+    void on_pushButton_4_clicked();
+
 private:
     Ui::QForm1 *ui;
 
     QSerialPort *QSerialPort1;
     QSerialSetup *QSerialSetup1;
     QTimer *QTimer1;
-    QPaintBox *QPaintBox1;
 
+    uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
     uint8_t rx[256], tx[256];
-    _sUNERBUSHandle unerbus;
+    uint8_t header, index, irRead, nBytes, cks, timeout;
 
-    void OnDecodeCMD(struct UNERBUSHandle *aBus, uint8_t iStartData);
+    void DecodeCMD();
 
     QTcpServer *QTcpServer1;
     //    QList<QTcpSocket *> MyTCPClientsList;
@@ -78,6 +82,9 @@ public:
     QHostAddress GetPeerAddress();
     quint16 GetPeerPort();
     QTcpSocket *GetClient();
+    void SetWidget(int width, int height, QWidget *widget);
+    void UpdateWidget();
+    QPixmap *GetPixmap();
 
 private slots:
     void OnQTimer();
@@ -92,6 +99,8 @@ private:
     uint8_t header, index, irRead, nBytes, cks, timeout;
     QTcpSocket *client;
     QTimer *timer;
+    QPaintBox *QPaintBox1;
+    QPen pen;
 
     void DecodeCMD();
 
