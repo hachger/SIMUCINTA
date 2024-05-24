@@ -182,6 +182,16 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
     clientID = aClient->peerAddress().toString() + ":";
     clientID = clientID +  QString().number(aClient->peerPort(),10);
 
+    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+        if(MyTCPClientsList.at(i)->GetPeerAddress()==aClient->peerAddress() &&
+            MyTCPClientsList.at(i)->GetPeerPort()==aClient->peerPort()){
+            MyTCPClientsList.at(i)->terminate();
+            while(!MyTCPClientsList.at(i)->wait());
+            delete MyTCPClientsList.takeAt(i);
+            break;
+        }
+    }
+
     for(int i=0; i<ui->tableWidget->rowCount(); i++){
         if(ui->tableWidget->item(i, 1)->text() == clientID){
             ui->tableWidget->removeRow(i);
@@ -189,14 +199,6 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
         }
     }
 
-    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-        if(MyTCPClientsList.at(i)->GetPeerAddress()==aClient->peerAddress() &&
-            MyTCPClientsList.at(i)->GetPeerPort()==aClient->peerPort()){
-            MyTCPClientsList.at(i)->terminate();
-            delete MyTCPClientsList.takeAt(i);
-            break;
-        }
-    }
 
     ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
 
@@ -205,15 +207,7 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
 
 void QForm1::OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta)
 {
-    // QPainter paint(QPaintBox1->getCanvas());
-
-    // paint.drawPixmap(0, 0, *aQPixmapCinta);
-
-    // QPaintBox1->update();
-
-
     ((QLabel *)aClientWidget)->setPixmap(*aQPixmapCinta);
-    // ((QLabel *)ui->tableWidget->cellWidget(aClientIndex, 2))->setPixmap(*aQPixmapCinta);
 }
 
 // void QForm1::OnQTcpClientTxData()
@@ -325,12 +319,9 @@ void QForm1::on_pushButton_3_clicked()
 
     if(QTcpServer1->isListening()){
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-            MyTCPClientsList.at(i)->GetClient()->close();
+            MyTCPClientsList.at(0)->GetClient()->close();
+            i--;
         }
-        // while((int)MyTCPClientsList.count() != 0){
-        //     MyTCPClientsList.at(0)->client->close();
-        //     delete MyTCPClientsList.takeAt(0);
-        // }
         QTcpServer1->close();
         MyTCPClientsList.clear();
         ui->pushButton_3->setText("TCP OPEN");
