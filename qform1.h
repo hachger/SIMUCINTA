@@ -39,6 +39,7 @@ private slots:
     // void OnQTcpClientTxData();
     // void OnQTcpClientDisconnected();
     void OnMyClientDisconnect(QTcpSocket *aClient);
+    void OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta);
 
     void on_pushButton_clicked();
 
@@ -48,14 +49,13 @@ private slots:
 
     void on_tableWidget_cellClicked(int row, int column);
 
-    void on_pushButton_4_clicked();
-
 private:
     Ui::QForm1 *ui;
 
     QSerialPort *QSerialPort1;
     QSerialSetup *QSerialSetup1;
     QTimer *QTimer1;
+    QPaintBox *QPaintBox1;
 
     uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
     uint8_t rx[256], tx[256];
@@ -82,9 +82,9 @@ public:
     QHostAddress GetPeerAddress();
     quint16 GetPeerPort();
     QTcpSocket *GetClient();
-    void SetWidget(int width, int height, QWidget *widget);
-    void UpdateWidget();
+    void SetWidget(int width, int height);
     QPixmap *GetPixmap();
+    void SetClientWidget(QWidget *aClientWidget);
 
 private slots:
     void OnQTimer();
@@ -92,17 +92,22 @@ private slots:
     void OnTcpClientDisconnect();
 signals:
     void MyClientDisconnect(QTcpSocket *aClient);
+    void MyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta);
 private:
+    QWidget *clientWidget;
+
     uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
 
     uint8_t rx[256], tx[256];
     uint8_t header, index, irRead, nBytes, cks, timeout;
     QTcpSocket *client;
     QTimer *timer;
-    QPaintBox *QPaintBox1;
+    QPixmap *QPixmapCinta;
     QPen pen;
+    int angle;
 
     void DecodeCMD();
+    void DrawCinta(int startAngle);
 
 };
 

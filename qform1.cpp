@@ -21,24 +21,25 @@ QForm1::QForm1(QWidget *parent)
     connect(QTcpServer1, &QTcpServer::newConnection, this, &QForm1::OnQTcpServer1ClientConnect);
     connect(QTcpServer1, &QTcpServer::acceptError, this, &QForm1::OnQTcpServer1Error);
 
-    ui->tableWidget->setColumnWidth(2, 66*12+6+23);
+    ui->tableWidget->setColumnWidth(2, 800);
     ui->tableWidget->setRowHeight(0, 80);
     ui->tableWidget->setHorizontalHeaderItem(0, new QTableWidgetItem("ID"));
     ui->tableWidget->setHorizontalHeaderItem(1, new QTableWidgetItem("IP:PORT"));
     ui->tableWidget->setHorizontalHeaderItem(2, new QTableWidgetItem("CINTA"));
-    // ui->tableWidget->setItem(0, 0, new QTableWidgetItem("NAME"));
-    // ui->tableWidget->item(0, 0)->setTextAlignment(Qt::AlignCenter);
-    // ui->tableWidget->setItem(0, 1, new QTableWidgetItem("IP:PORT"));
-    // ui->tableWidget->item(0, 1)->setTextAlignment(Qt::AlignCenter);
-    // ui->tableWidget->setItem(0, 2, new QTableWidgetItem(""));
-    // ui->tableWidget->item(0, 2)->setTextAlignment(Qt::AlignCenter);
 
     QTimer1->start(10);
-
 }
 
 QForm1::~QForm1()
 {
+    if(QTcpServer1->isListening()){
+        for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+            MyTCPClientsList.at(i)->GetClient()->close();
+        }
+        QTcpServer1->close();
+        MyTCPClientsList.clear();
+    }
+
     delete ui;
 }
 
@@ -150,24 +151,25 @@ void QForm1::OnQTcpServer1ClientConnect()
     clientID = clientID +  QString().number(MyTCPClientsList.last()->GetPeerPort(),10);
 
     row = ui->tableWidget->rowCount();
+
     ui->tableWidget->setRowCount(row+1);
     ui->tableWidget->setRowHeight(row, 80);
     ui->tableWidget->setItem(row, 0, new QTableWidgetItem("NAME"));
     ui->tableWidget->item(row, 0)->setTextAlignment(Qt::AlignCenter);
     ui->tableWidget->setItem(row, 1, new QTableWidgetItem(clientID));
     ui->tableWidget->item(row, 1)->setTextAlignment(Qt::AlignCenter);
-    MyTCPClientsList.last()->SetWidget(66*13+6, 80, nullptr);
+
     QLabel *lb = new QLabel;
-    lb->setPixmap(*MyTCPClientsList.last()->GetPixmap());
     lb->setAlignment(Qt::AlignCenter);
     ui->tableWidget->setCellWidget(row, 2, lb);
 
+    MyTCPClientsList.last()->SetClientWidget(ui->tableWidget->cellWidget(row, 2));
 
-    //    MyTCPClientsList.append(QTcpServer1->nextPendingConnection());
-    ui->listWidget->addItem(clientID);
-    ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
 
- //   connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
+    connect(aux, &MyClient::MyClientUpdateWidget, this, &QForm1::OnMyClientUpdateWidget);
+    MyTCPClientsList.last()->SetWidget(800, 80);
+
+//   connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
 //    connect(MyTCPClientsList.last()->client, &QTcpSocket::disconnected, this, &QForm1::OnQTcpClientDisconnected);
     connect(aux, &MyClient::MyClientDisconnect, this, &QForm1::OnMyClientDisconnect);
 
@@ -180,12 +182,6 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
     clientID = aClient->peerAddress().toString() + ":";
     clientID = clientID +  QString().number(aClient->peerPort(),10);
 
-    for(int i=0; i<ui->listWidget->count(); i++){
-        if(ui->listWidget->item(i)->text() == clientID){
-            delete ui->listWidget->takeItem(i);
-            break;
-        }
-    }
     for(int i=0; i<ui->tableWidget->rowCount(); i++){
         if(ui->tableWidget->item(i, 1)->text() == clientID){
             ui->tableWidget->removeRow(i);
@@ -205,6 +201,19 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
     ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
 
 
+}
+
+void QForm1::OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta)
+{
+    // QPainter paint(QPaintBox1->getCanvas());
+
+    // paint.drawPixmap(0, 0, *aQPixmapCinta);
+
+    // QPaintBox1->update();
+
+
+    ((QLabel *)aClientWidget)->setPixmap(*aQPixmapCinta);
+    // ((QLabel *)ui->tableWidget->cellWidget(aClientIndex, 2))->setPixmap(*aQPixmapCinta);
 }
 
 // void QForm1::OnQTcpClientTxData()
@@ -324,7 +333,6 @@ void QForm1::on_pushButton_3_clicked()
         // }
         QTcpServer1->close();
         MyTCPClientsList.clear();
-        ui->listWidget->clear();
         ui->pushButton_3->setText("TCP OPEN");
         return;
     }
@@ -349,7 +357,7 @@ MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket):QThread(parent)
     client = clientSocket;
     irRead = 0;
     header = 0;
-    QPaintBox1 = nullptr;
+    QPixmapCinta = nullptr;
     this->start(Priority::NormalPriority);
 }
 
@@ -374,47 +382,29 @@ QTcpSocket *MyClient::GetClient()
     return client;
 }
 
-void MyClient::SetWidget(int width, int height, QWidget *widget)
+void MyClient::SetWidget(int width, int height)
 {
-    if(QPaintBox1 != nullptr)
-        delete QPaintBox1;
+    if(QPixmapCinta != nullptr)
+        delete QPixmapCinta;
 
-    QPaintBox1 = new QPaintBox(width, height, widget);
-    QPainter paint(QPaintBox1->getCanvas());
-    pen.setColor(Qt::red);
-    pen.setWidth(3);
+    QPixmapCinta = new QPixmap(width, height);
+    QPixmapCinta->fill(Qt::black);
 
-    paint.setPen(pen);
-    paint.drawRoundedRect(3, 50, width-3, 27, 10.0, 10.0, Qt::AbsoluteSize);
-    pen.setWidth(2);
-    pen.setColor(Qt::gray);
-    paint.setPen(pen);
-    paint.drawEllipse(5+(0*66), 53, 23, 23);
-    paint.drawEllipse(5+(1*66), 53, 23, 23);
-    paint.drawEllipse(5+(2*66), 53, 23, 23);
-    paint.drawEllipse(5+(3*66), 53, 23, 23);
-    paint.drawEllipse(5+(4*66), 53, 23, 23);
-    paint.drawEllipse(5+(5*66), 53, 23, 23);
-    paint.drawEllipse(5+(6*66), 53, 23, 23);
-    paint.drawEllipse(5+(7*66), 53, 23, 23);
-    paint.drawEllipse(5+(8*66), 53, 23, 23);
-    paint.drawEllipse(5+(9*66), 53, 23, 23);
-    paint.drawEllipse(5+(10*66), 53, 23, 23);
-    paint.drawEllipse(5+(11*66), 53, 23, 23);
-    paint.drawEllipse(5+(12*66), 53, 23, 23);
+    qDebug() << QString().asprintf("SIZE %d, %d", QPixmapCinta->width(), QPixmapCinta->height());
 
-    QPaintBox1->update();
-
+    DrawCinta(0);
+    emit MyClientUpdateWidget(clientWidget, QPixmapCinta);
 }
 
-void MyClient::UpdateWidget()
-{
-    QPaintBox1->update();
-}
 
 QPixmap *MyClient::GetPixmap()
 {
-    return QPaintBox1->getCanvas();
+    return QPixmapCinta;
+}
+
+void MyClient::SetClientWidget(QWidget *aClientWidget)
+{
+    clientWidget = aClientWidget;
 }
 
 void MyClient::run()
@@ -424,9 +414,9 @@ void MyClient::run()
     client->moveToThread(this->thread());
     connect(client, &QTcpSocket::disconnected, this, &MyClient::OnTcpClientDisconnect);
 
-    timer = new QTimer(this);
+    timer = new QTimer();
     connect(timer, &QTimer::timeout, this, &MyClient::OnQTimer);
-    timer->start(10);
+    timer->start(100);
 
     exec();
 
@@ -439,6 +429,15 @@ void MyClient::OnQTimer()
         timeout--;
         if(!timeout)
             header = 0;
+    }
+
+    angle += 30;
+    if(angle >= 360)
+        angle = 0;
+
+    if(QPixmapCinta != nullptr){
+        DrawCinta(angle);
+        emit MyClientUpdateWidget(clientWidget, QPixmapCinta);
     }
 }
 
@@ -529,36 +528,41 @@ void MyClient::DecodeCMD()
 
 }
 
-void QForm1::on_tableWidget_cellClicked(int row, int column)
+void MyClient::DrawCinta(int startAngle)
 {
-    if(ui->tableWidget->rowCount()>0){
-        if(column == 2)
-            ui->tableWidget->cellWidget(row, column)->update();
+    if(QPixmapCinta == nullptr)
+        return;
+
+    QPainter paint(QPixmapCinta);
+    int x, l;
+
+    l = (QPixmapCinta->width()-12*27)/12;
+    x = QPixmapCinta->width()-12*27-l*11;
+    x /= 2;
+
+    l = 27+l;
+
+    pen.setColor(Qt::red);
+    pen.setWidth(3);
+    paint.setPen(pen);
+    paint.drawRoundedRect(3, 50, QPixmapCinta->width()-3, 27, 10.0, 10.0, Qt::AbsoluteSize);
+    pen.setWidth(2);
+    // paint.drawEllipse(5+(0*66), 53, 23, 23);
+    for (int i = 0; i < 12; ++i){
+        pen.setColor(Qt::gray);
+        paint.setPen(pen);
+        paint.drawArc(x+i*l, 53, 23, 23, startAngle*16, 330*16);
+        pen.setColor(Qt::white);
+        paint.setPen(pen);
+        paint.drawArc(x+i*l, 53, 23, 23, (startAngle+330)*16, 30*16);
     }
 
+    // emit MyClientUpdateWidget(QPixmapCinta);
 }
 
-
-void QForm1::on_pushButton_4_clicked()
+void QForm1::on_tableWidget_cellClicked(int row, int column)
 {
-    // ui->tableWidget->update();
-    QPainter paint(MyTCPClientsList.at(0)->GetPixmap());
-
-    QPen pen;
-    QBrush brush;
-
-    pen.setStyle(Qt::SolidLine);
-    pen.setWidth(21);
-    pen.setColor(Qt::yellow);
-
-    paint.setPen(pen);
-    paint.drawLine(0, 40, 100, 40);
-
-    QLabel *lb = new QLabel;
-    lb->setPixmap(*MyTCPClientsList.last()->GetPixmap());
-    lb->setAlignment(Qt::AlignCenter);
-    ui->tableWidget->setCellWidget(0, 2, lb);
-
-
 }
+
+
 

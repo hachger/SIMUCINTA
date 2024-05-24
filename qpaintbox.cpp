@@ -35,7 +35,7 @@ void QPaintBox::setWidth(int aWidth){
 }
 //------------------------------------------------------------------------------
 void QPaintBox::setHeight(int aHeight){
-    pixelCanvas->size().setWidth(aHeight);
+    pixelCanvas->size().setHeight(aHeight);
     this->resize(this->width(), aHeight);
 }
 //------------------------------------------------------------------------------
