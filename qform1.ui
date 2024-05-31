@@ -18,7 +18,7 @@
     <item row="0" column="0">
      <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,1">
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,1">
+       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0,0,1">
         <item>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
@@ -91,6 +91,27 @@
          </layout>
         </item>
         <item>
+         <widget class="QPushButton" name="pushButton_4">
+          <property name="text">
+           <string>START</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_5">
+          <property name="text">
+           <string>VCinta</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_3">
+          <property name="text">
+           <string>1.0</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="horizontalSpacer">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
@@ -119,6 +140,15 @@
         </item>
         <item>
          <widget class="QTableWidget" name="tableWidget">
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="frameShape">
+           <enum>QFrame::NoFrame</enum>
+          </property>
           <property name="rowCount">
            <number>0</number>
           </property>
@@ -135,16 +165,6 @@
      </layout>
     </item>
    </layout>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>808</width>
-     <height>21</height>
-    </rect>
-   </property>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

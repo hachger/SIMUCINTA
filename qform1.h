@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QThread>
 #include <QDebug>
+#include <QRandomGenerator>
 
 class MyClient;
 
@@ -49,6 +50,10 @@ private slots:
 
     void on_tableWidget_cellClicked(int row, int column);
 
+    void on_pushButton_4_clicked();
+
+    void on_pushButton_5_clicked();
+
 private:
     Ui::QForm1 *ui;
 
@@ -85,11 +90,17 @@ public:
     void SetWidget(int width, int height);
     QPixmap *GetPixmap();
     void SetClientWidget(QWidget *aClientWidget);
+    void SetVCinta(float v);
+    float GetVCinta();
+    void StartCinta(float v);
+    void StopCinta();
 
 private slots:
     void OnQTimer();
     void OnQTcpClientTxData();
     void OnTcpClientDisconnect();
+
+    void timerEvent(QTimerEvent *event) override;
 signals:
     void MyClientDisconnect(QTcpSocket *aClient);
     void MyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta);
@@ -103,11 +114,28 @@ private:
     QTcpSocket *client;
     QTimer *timer;
     QPixmap *QPixmapCinta;
+    QPixmap *QPixmapBoxes;
     QPen pen;
+    QBrush brush;
     int angle;
+    float vCinta;
+    int pixelsTime;
+    int timePixels;
+    int boxTime, boxTimeAux;
+    bool cintaStarted;
+    QRandomGenerator myRandom;
+    quint16 boxHeight;
+
+    struct box{
+        uint8_t     boxType;
+        uint16_t    xPos;
+    };
+
+    QList<struct box *> boxes;
 
     void DecodeCMD();
     void DrawCinta(int startAngle);
+    void AddBoxToCinta();
 
 };
 
