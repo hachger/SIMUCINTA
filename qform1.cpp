@@ -23,11 +23,13 @@ QForm1::QForm1(QWidget *parent)
     connect(QTcpServer1, &QTcpServer::newConnection, this, &QForm1::OnQTcpServer1ClientConnect);
     connect(QTcpServer1, &QTcpServer::acceptError, this, &QForm1::OnQTcpServer1Error);
 
-    ui->tableWidget->setColumnWidth(2, 800);
-    ui->tableWidget->setRowHeight(0, 80);
+    ui->tableWidget->setColumnWidth(2, 900);
+    ui->tableWidget->setRowHeight(0, 100);
     ui->tableWidget->setHorizontalHeaderItem(0, new QTableWidgetItem("ID"));
     ui->tableWidget->setHorizontalHeaderItem(1, new QTableWidgetItem("IP:PORT"));
     ui->tableWidget->setHorizontalHeaderItem(2, new QTableWidgetItem("CINTA"));
+    ui->tableWidget->setHorizontalHeaderItem(3, new QTableWidgetItem("V CINTA"));
+    ui->tableWidget->setHorizontalHeaderItem(4, new QTableWidgetItem("START/STOP"));
 
 
     QTimer1->start(10);
@@ -143,6 +145,8 @@ void QForm1::OnQTcpServer1ClientConnect()
     QString clientID;
     MyClient *aux;
     int row;
+    bool ok;
+    float f;
 
     // aux->client = QTcpServer1->nextPendingConnection();
 
@@ -156,11 +160,16 @@ void QForm1::OnQTcpServer1ClientConnect()
     row = ui->tableWidget->rowCount();
 
     ui->tableWidget->setRowCount(row+1);
-    ui->tableWidget->setRowHeight(row, 80);
+    ui->tableWidget->setRowHeight(row, 100);
     ui->tableWidget->setItem(row, 0, new QTableWidgetItem("NAME"));
     ui->tableWidget->item(row, 0)->setTextAlignment(Qt::AlignCenter);
     ui->tableWidget->setItem(row, 1, new QTableWidgetItem(clientID));
     ui->tableWidget->item(row, 1)->setTextAlignment(Qt::AlignCenter);
+    ui->tableWidget->setItem(row, 3, new QTableWidgetItem(""));
+    ui->tableWidget->item(row, 3)->setTextAlignment(Qt::AlignCenter);
+    ui->tableWidget->setItem(row, 4, new QTableWidgetItem("START"));
+    ui->tableWidget->item(row, 4)->setTextAlignment(Qt::AlignCenter);
+    ui->tableWidget->item(row, 4)->setFlags(Qt::NoItemFlags | Qt::ItemIsEnabled);
 
     QLabel *lb = new QLabel;
     lb->setAlignment(Qt::AlignCenter);
@@ -170,9 +179,23 @@ void QForm1::OnQTcpServer1ClientConnect()
 
 
     connect(aux, &MyClient::MyClientUpdateWidget, this, &QForm1::OnMyClientUpdateWidget);
-    MyTCPClientsList.last()->SetWidget(800, 80);
-    if(ui->pushButton_4->text()=="STOP")
-        MyTCPClientsList.last()->StartCinta(1);
+    MyTCPClientsList.last()->SetWidget(ui->tableWidget->columnWidth(2)-10, 80);
+    f = ui->lineEdit_3->text().toFloat(&ok);
+    if(!ok)
+        f = 1.0;
+    else{
+        if(f > 3.0f)
+            f = 1.0;
+    }
+    if(ui->pushButton_4->text()=="STOP"){
+        ui->tableWidget->item(row, 3)->setText(QString().asprintf("%0.2f", f));
+        MyTCPClientsList.last()->StartCinta(f);
+        ui->tableWidget->item(row, 4)->setText("STOP");
+    }
+    else{
+        MyTCPClientsList.last()->SetVCinta(f);
+        ui->tableWidget->item(row, 3)->setText(QString().asprintf("%0.2f", f));
+    }
 
 //   connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
 //    connect(MyTCPClientsList.last()->client, &QTcpSocket::disconnected, this, &QForm1::OnQTcpClientDisconnected);
@@ -358,7 +381,11 @@ MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket):QThread(parent)
     timePixels = 10;
     pixelsTime = 1;
     cintaStarted = false;
-    this->startTimer(10);
+    outputsDrawed = false;
+
+    memset(nBoxes, 0, sizeof(nBoxes));
+
+    timerId = this->startTimer(10);
     this->start(Priority::NormalPriority);
 }
 
@@ -416,20 +443,17 @@ void MyClient::SetClientWidget(QWidget *aClientWidget)
 void MyClient::SetVCinta(float v)
 {
     vCinta = v;
-    if(v < 1.0){
-        pixelsTime = 1;
-        timePixels = floor(10/floor(v*100)+0.5);
-    }
-    else{
-        pixelsTime = floor(v + 0.5);
-        timePixels = 10;
-    }
+    pixelsTime = floor(v) + 1;
+    timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
 
-    boxTime = timePixels * 10;
-    if(boxTime > 500)
-        boxTime = 500;
-    boxTimeAux = boxTime;
+    boxTimeAux = 100/pixelsTime;
 
+    qDebug() << QString().asprintf("pxTime: %d, tPx: %d, boxTime: %d", pixelsTime, timePixels, boxTimeAux);
+
+    if(cintaStarted){
+        this->killTimer(timerId);
+        timerId = this->startTimer(timePixels);
+    }
 }
 
 float MyClient::GetVCinta()
@@ -440,32 +464,59 @@ float MyClient::GetVCinta()
 void MyClient::StartCinta(float v)
 {
     vCinta = v;
-    if(v < 1.0f){
-        pixelsTime = 1;
-        timePixels = floor(10/floor(v*100)+0.5);
-    }
-    else{
-        pixelsTime = floor(v + 0.5);
-        timePixels = 10;
-    }
+    pixelsTime = floor(v) + 1;
+    timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
 
-    boxTime = timePixels * 10;
-    if(boxTime > 500)
-        boxTime = 500;
-    boxTimeAux = boxTime;
+    boxTimeAux = 100/pixelsTime;
+    boxTime = 2000/timePixels;
+
+    qDebug() << QString().asprintf("pxTime: %d, tPx: %d, boxTime: %d, v: %0.1f", pixelsTime, timePixels, boxTimeAux, vCinta);
 
     cintaStarted = true;
-    this->startTimer(timePixels);
+    this->killTimer(timerId);
+    timerId = this->startTimer(timePixels);
 
-//    timer->setInterval(timePixels);
-//    timer->start(timePixels);
 }
 
 void MyClient::StopCinta()
 {
-//    timer->setInterval(10);
-
     cintaStarted = false;
+    this->killTimer(timerId);
+    timerId = this->startTimer(10);
+}
+
+void MyClient::ResetCinta()
+{
+    if(cintaStarted || QPixmapCinta==nullptr)
+        return;
+
+    int width;
+    int height;
+
+    width = QPixmapCinta->width();
+    height = QPixmapCinta->height();
+    delete QPixmapCinta;
+
+    if(QPixmapBoxes != nullptr)
+        delete QPixmapBoxes;
+
+    QPixmapCinta = new QPixmap(width, height);
+    QPixmapCinta->fill(Qt::black);
+
+    QPixmapBoxes = new QPixmap(width-40, height-33);
+    QPixmapBoxes->fill(Qt::black);
+
+    qDebug() << QString().asprintf("SIZE %d, %d", QPixmapCinta->width(), QPixmapCinta->height());
+
+    memset(nBoxes, 0, sizeof(nBoxes));
+
+    DrawCinta(0);
+    emit MyClientUpdateWidget(clientWidget, QPixmapCinta);
+}
+
+uint16_t *MyClient::GetCurrentBoxes()
+{
+    return (uint16_t *)nBoxes;
 }
 
 void MyClient::run()
@@ -502,18 +553,22 @@ void MyClient::OnQTimer()
                 boxes.at(i)->xPos += pixelsTime;
 //                if(i == 0)
 //                    qDebug() << QString().number(boxes.at(0)->xPos);
-                if(boxes.at(i)->xPos > (uint32_t)QPixmapCinta->width())
+                if(boxes.at(i)->xPos > (uint32_t)QPixmapCinta->width()){
+                    nBoxes[(boxes.at(i)->boxType-5)/3][2]++;
                     delete boxes.takeAt(i);
+                }
             }
 
             boxTime--;
             if(boxTime == 0){
-                boxTime = boxTimeAux + myRandom.bounded(100);
+                boxTime = boxTimeAux + myRandom.global()->bounded(80)/pixelsTime;
 
                 struct box *aux = new struct box;
                 boxes.append(aux);
-                boxes.last()->boxType = 5+myRandom.bounded(3)*3;
+                boxes.last()->boxType = 5 + myRandom.global()->bounded(3)*3;
                 boxes.last()->xPos = 2;
+
+                nBoxes[(boxes.last()->boxType-5)/3][0]++;
             }
 
             DrawCinta(angle);
@@ -588,12 +643,64 @@ void MyClient::timerEvent(QTimerEvent *event)
 void MyClient::DecodeCMD()
 {
     uint8_t length, cks, i;
+    _uWork w;
+    bool stateBox;
+    QString str;
 
     length = 0;
     switch(rx[0]){
+    case 0x50://START CINTA
+        w.u32 = vCinta*10;
+        tx[7] = w.u8[0];
+        tx[8] = w.u8[1];
+        tx[9] = w.u8[2];
+        tx[10] = w.u8[3];
+        for(int i=0; i<3; i++){
+            tx[11+i*3] = boxOutput[i].boxType;
+            w.u16[0] = boxOutput[i].xPos-10;
+            tx[12+i*3] = w.u8[0];
+            tx[13+i*3] = w.u8[1];
+        }
+        tx[20] = 0x0D;
+        length = 13+1;
+        cintaStarted = true;
+        break;
+    case 0x52://DROP BOX
+        w.u8[0] = rx[1];
+        tx[7] = 0x0A;
+        stateBox = false;
+        for(int i=0; i<boxes.count(); i++){
+            if(boxes.at(i)->boxType==w.u8[0]){
+                stateBox = false;
+                if(boxOutput[0].boxType==w.u8[0])
+                    stateBox = (boxes.at(i)->xPos>=boxOutput[0].xPos && boxes.at(i)->xPos<=(boxOutput[0].xPos+40));
+                if(boxOutput[1].boxType==w.u8[0])
+                    stateBox = (boxes.at(i)->xPos>=boxOutput[1].xPos && boxes.at(i)->xPos<=(boxOutput[1].xPos+40));
+                if(boxOutput[2].boxType==w.u8[0])
+                    stateBox = (boxes.at(i)->xPos>=boxOutput[2].xPos && boxes.at(i)->xPos<=(boxOutput[2].xPos+40));
+            }
+            if(stateBox){
+                nBoxes[(boxes.at(i)->boxType-5)/3][1]++;
+                delete boxes.takeAt(i);
+                tx[7] = 0x0D;
+                break;
+            }
+        }
+        length = 3;
+        break;
+    case 0x53://RESET CINTA
+        if(cintaStarted)
+            tx[7] = 0x0A;
+        else{
+            ResetCinta();
+            tx[7] = 0x0D;
+        }
+        length = 3;
+        break;
+    case 0x51://STOP CINTA
     case 0xF0:
         tx[7] = 0x0D;
-        length = 2;
+        length = 3;
         break;
     }
 
@@ -630,6 +737,21 @@ void MyClient::DrawCinta(int startAngle)
     l = 27+l;
 
     QPixmapCinta->fill(Qt::black);
+    pen.setWidth(1);
+    QFont font("Courier", 12);
+    paint.setFont(font);
+
+    pen.setColor(Qt::green);
+    paint.setPen(pen);
+    QString str = QString().asprintf("BOXES: %05d|%05d|%05d", nBoxes[0][0], nBoxes[0][1], nBoxes[0][2]);
+    paint.drawText(2, 12, str);
+    pen.setColor(Qt::magenta);
+    paint.setPen(pen);
+    paint.drawText(QFontMetrics(font).horizontalAdvance(str)+10, 12, QString().asprintf("BOXES: %05d|%05d|%05d", nBoxes[1][0], nBoxes[1][1], nBoxes[1][2]));
+    pen.setColor(Qt::cyan);
+    paint.setPen(pen);
+    paint.drawText(QFontMetrics(font).horizontalAdvance(str)*2+20, 12, QString().asprintf("BOXES: %05d|%05d|%05d", nBoxes[2][0], nBoxes[2][1], nBoxes[2][2]));
+
     pen.setColor(Qt::red);
     pen.setWidth(3);
     paint.setPen(pen);
@@ -645,6 +767,49 @@ void MyClient::DrawCinta(int startAngle)
         paint.drawArc(x+i*l, 53, 23, 23, (startAngle+330)*16, 30*16);
     }
 
+    brush.setStyle(Qt::SolidPattern);
+    pen.setWidth(1);
+    if(!outputsDrawed){
+        outputsDrawed = true;
+
+        boxOutput[0].xPos = myRandom.global()->bounded(101) + 200 + 2;
+        boxOutput[1].xPos = myRandom.global()->bounded(101) + 420 + 2;
+        boxOutput[2].xPos = myRandom.global()->bounded(101) + 580 + 2;
+        boxOutput[0].boxType = 5+myRandom.global()->bounded(3)*3;
+        for(int i=1; i<3; i++){
+            boxOutput[i].boxType = 5+myRandom.global()->bounded(3)*3;
+            for(int j=0; j<i; j++){
+                if(boxOutput[i].boxType == boxOutput[j].boxType){
+                    i--;
+                    break;
+                }
+            }
+        }
+
+        qDebug() << QString().asprintf("x1:%d, x2:%d, x3:%d", boxOutput[0].xPos, boxOutput[1].xPos, boxOutput[2].xPos);
+        qDebug() << QString().asprintf("t1:%d, t2:%d, t3:%d", boxOutput[0].boxType, boxOutput[1].boxType, boxOutput[2].boxType);
+    }
+    for(int i=0; i<3; i++){
+        switch(boxOutput[i].boxType){
+        case 5:
+            brush.setColor(Qt::green);
+            pen.setColor(Qt::green);
+            break;
+        case 8:
+            brush.setColor(Qt::magenta);
+            pen.setColor(Qt::magenta);
+            break;
+        case 11:
+            brush.setColor(Qt::cyan);
+            pen.setColor(Qt::cyan);
+            break;
+        }
+        paint.setBrush(brush);
+        paint.setPen(pen);
+        paint.drawRoundedRect(boxOutput[i].xPos, 38, 40, 10, 3.0, 3.0, Qt::AbsoluteSize);
+    }
+
+
 
 
     // emit MyClientUpdateWidget(QPixmapCinta);
@@ -655,6 +820,7 @@ void MyClient::AddBoxToCinta()
     QPainter paint(QPixmapCinta);
 
     brush.setStyle(Qt::SolidPattern);
+    pen.setWidth(1);
     for(int i=0; i<boxes.count(); i++){
         brush.setColor(Qt::green);
         pen.setColor(Qt::green);
@@ -667,7 +833,6 @@ void MyClient::AddBoxToCinta()
             pen.setColor(Qt::cyan);
         }
 
-        pen.setWidth(1);
         paint.setPen(pen);
         paint.setBrush(brush);
         paint.drawRect(boxes.at(i)->xPos, 45 - (boxes.at(i)->boxType+10), 20, boxes.at(i)->boxType);
@@ -676,18 +841,16 @@ void MyClient::AddBoxToCinta()
 
 }
 
-void QForm1::on_tableWidget_cellClicked(int row, int column)
-{
-}
-
-
-
-
 void QForm1::on_pushButton_4_clicked()
 {
     if(ui->pushButton_4->text() == "START"){
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-            MyTCPClientsList.at(i)->StartCinta(1.0);
+            bool ok;
+            float v = ui->lineEdit_3->text().toFloat(&ok);
+            if(!ok)
+                v = 0.5;
+            ui->tableWidget->item(i, 3)->setText(QString().asprintf("%0.2f", v));
+            MyTCPClientsList.at(i)->StartCinta(0.5);
         }
         ui->pushButton_4->setText("STOP");
     }
@@ -704,7 +867,44 @@ void QForm1::on_pushButton_4_clicked()
 void QForm1::on_pushButton_5_clicked()
 {
     for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-        MyTCPClientsList.at(i)->SetVCinta(ui->lineEdit_3->text().toFloat());
+        bool ok;
+        float v = ui->lineEdit_3->text().toFloat(&ok);
+        if(!ok)
+            v = 0.5;
+        ui->tableWidget->item(i, 3)->setText(QString().asprintf("%0.2f", v));
+        MyTCPClientsList.at(i)->SetVCinta(v);
+    }
+}
+
+
+void QForm1::on_tableWidget_cellChanged(int row, int column)
+{
+    if(column == 3){
+        bool ok;
+        float v = ui->tableWidget->item(row, column)->text().toFloat(&ok);
+        if(!ok)
+            v = 1.0;
+        else{
+            if(v > 3.0f)
+                v = 3.0f;
+        }
+        ui->tableWidget->item(row, column)->setText(QString().asprintf("%0.1f", v));
+        MyTCPClientsList.at(row)->SetVCinta(v);
+    }
+}
+
+
+void QForm1::on_tableWidget_cellDoubleClicked(int row, int column)
+{
+    if(column == 4){
+        if(ui->tableWidget->item(row, column)->text() == "START"){
+            MyTCPClientsList.at(row)->StartCinta(ui->tableWidget->item(row, 3)->text().toFloat());
+            ui->tableWidget->item(row, column)->setText("STOP");
+        }
+        else{
+            MyTCPClientsList.at(row)->StopCinta();
+            ui->tableWidget->item(row, column)->setText("START");
+        }
     }
 }
 

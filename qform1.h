@@ -12,6 +12,16 @@
 #include <QDebug>
 #include <QRandomGenerator>
 
+typedef union{
+    uint8_t     u8[4];
+    int8_t      i8[4];
+    uint16_t    u16[2];
+    int16_t     i16[2];
+    uint32_t    u32;
+    int32_t     i32;
+    float       f;
+} _uWork;
+
 class MyClient;
 
 QT_BEGIN_NAMESPACE
@@ -48,11 +58,13 @@ private slots:
 
     void on_pushButton_3_clicked();
 
-    void on_tableWidget_cellClicked(int row, int column);
-
     void on_pushButton_4_clicked();
 
     void on_pushButton_5_clicked();
+
+    void on_tableWidget_cellChanged(int row, int column);
+
+    void on_tableWidget_cellDoubleClicked(int row, int column);
 
 private:
     Ui::QForm1 *ui;
@@ -79,7 +91,7 @@ class MyClient : public QThread
     Q_OBJECT
 
 protected:
-    void run();
+    void run() override;
 public:
     MyClient(QObject *parent=nullptr, QTcpSocket *clientSocket = nullptr);
     ~MyClient();
@@ -94,6 +106,8 @@ public:
     float GetVCinta();
     void StartCinta(float v);
     void StopCinta();
+    void ResetCinta();
+    uint16_t *GetCurrentBoxes();
 
 private slots:
     void OnQTimer();
@@ -122,14 +136,23 @@ private:
     int pixelsTime;
     int timePixels;
     int boxTime, boxTimeAux;
-    bool cintaStarted;
+    bool cintaStarted, outputsDrawed;
     QRandomGenerator myRandom;
     quint16 boxHeight;
+    int timerId;
+    uint16_t nBoxes[3][3];
+
 
     struct box{
         uint8_t     boxType;
         uint16_t    xPos;
     };
+
+    struct {
+        uint8_t     boxType;
+        uint16_t    xPos;
+    } boxOutput[3];
+
 
     QList<struct box *> boxes;
 
