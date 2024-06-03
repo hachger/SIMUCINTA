@@ -569,6 +569,20 @@ void MyClient::OnQTimer()
                 boxes.last()->xPos = 2;
 
                 nBoxes[(boxes.last()->boxType-5)/3][0]++;
+
+                int i;
+                HEADER[4] = 3;
+                HEADER[6] = 0x5F;
+                tx[7] = boxes.last()->boxType;
+                cks = 0;
+                for (i = 0; i < 8; ++i) {
+                    if(i < 7)
+                        tx[i] = HEADER[i];
+                    cks ^= tx[i];
+                }
+                tx[i] = cks;
+
+                client->write((char *)tx, 9);
             }
 
             DrawCinta(angle);
@@ -657,13 +671,13 @@ void MyClient::DecodeCMD()
         tx[10] = w.u8[3];
         for(int i=0; i<3; i++){
             tx[11+i*3] = boxOutput[i].boxType;
-            w.u16[0] = boxOutput[i].xPos-10;
+            w.u16[0] = boxOutput[i].xPos+10;
             tx[12+i*3] = w.u8[0];
             tx[13+i*3] = w.u8[1];
         }
-        tx[20] = 0x0D;
-        length = 13+1;
-        cintaStarted = true;
+        length = 14;
+        if(!cintaStarted)
+            StartCinta(vCinta);
         break;
     case 0x52://DROP BOX
         w.u8[0] = rx[1];
@@ -686,7 +700,7 @@ void MyClient::DecodeCMD()
                 break;
             }
         }
-        length = 3;
+        length = 2;
         break;
     case 0x53://RESET CINTA
         if(cintaStarted)
@@ -695,12 +709,12 @@ void MyClient::DecodeCMD()
             ResetCinta();
             tx[7] = 0x0D;
         }
-        length = 3;
+        length = 2;
         break;
     case 0x51://STOP CINTA
     case 0xF0:
         tx[7] = 0x0D;
-        length = 3;
+        length = 2;
         break;
     }
 
@@ -708,7 +722,7 @@ void MyClient::DecodeCMD()
         HEADER[4] = length + 1;
         HEADER[6] = rx[0];
         cks = 0;
-        length += 7;
+        length += 6;
 
         for (i = 0; i < length; ++i) {
             if(i < 7)
@@ -717,7 +731,7 @@ void MyClient::DecodeCMD()
         }
         tx[i] = cks;
 
-        client->write((char *)tx, length);
+        client->write((char *)tx, length+1);
     }
 
 }
@@ -774,7 +788,7 @@ void MyClient::DrawCinta(int startAngle)
 
         boxOutput[0].xPos = myRandom.global()->bounded(101) + 200 + 2;
         boxOutput[1].xPos = myRandom.global()->bounded(101) + 420 + 2;
-        boxOutput[2].xPos = myRandom.global()->bounded(101) + 580 + 2;
+        boxOutput[2].xPos = myRandom.global()->bounded(101) + 590 + 2;
         boxOutput[0].boxType = 5+myRandom.global()->bounded(3)*3;
         for(int i=1; i<3; i++){
             boxOutput[i].boxType = 5+myRandom.global()->bounded(3)*3;
