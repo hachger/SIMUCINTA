@@ -659,7 +659,6 @@ void MyClient::DecodeCMD()
     uint8_t length, cks, i;
     _uWork w;
     bool stateBox;
-    QString str;
 
     length = 0;
     switch(rx[0]){
