@@ -23,6 +23,14 @@ typedef union{
     float       f;
 } _uWork;
 
+typedef enum {
+    MYCLIENT_STARTED = 0x01,
+    MYCLIENT_STOPED = 0x02,
+    MYCLIENT_NEWVCINTA = 0x04,
+    MYCLIENT_RESETCINTA = 0x08,
+    MYCLIENT_SETNAME = 0x10,
+} MYCLIENTSTATE;
+
 class MyClient;
 
 QT_BEGIN_NAMESPACE
@@ -52,6 +60,7 @@ private slots:
     // void OnQTcpClientDisconnected();
     void OnMyClientDisconnect(QTcpSocket *aClient);
     void OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta);
+    void OnMyClientStateChange(MyClient *obj, MYCLIENTSTATE aNewState);
 
     void on_pushButton_clicked();
 
@@ -109,6 +118,7 @@ public:
     void StopCinta();
     void ResetCinta();
     uint16_t *GetCurrentBoxes();
+    QString GetNameClient();
 
 private slots:
     void OnQTimer();
@@ -119,10 +129,14 @@ private slots:
 signals:
     void MyClientDisconnect(QTcpSocket *aClient);
     void MyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta);
+    void MyClientStateChange(MyClient *obj, MYCLIENTSTATE aNewState);
 private:
     QWidget *clientWidget;
 
     uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
+    uint8_t HEADERNMANE[6] = {'+', '&', 'N', 'M', 'C', '@'};
+
+    QString nameClient;
 
     uint8_t rx[256], tx[256];
     uint8_t header, index, irRead, nBytes, cks, timeout;

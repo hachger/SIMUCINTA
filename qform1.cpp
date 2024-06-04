@@ -200,6 +200,7 @@ void QForm1::OnQTcpServer1ClientConnect()
 //   connect(MyTCPClientsList.last()->client, &QTcpSocket::readyRead, this, &QForm1::OnQTcpClientTxData);
 //    connect(MyTCPClientsList.last()->client, &QTcpSocket::disconnected, this, &QForm1::OnQTcpClientDisconnected);
     connect(aux, &MyClient::MyClientDisconnect, this, &QForm1::OnMyClientDisconnect);
+    connect(aux, &MyClient::MyClientStateChange, this, &QForm1::OnMyClientStateChange);
 
 
 }
@@ -236,6 +237,30 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
 void QForm1::OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCinta)
 {
     ((QLabel *)aClientWidget)->setPixmap(*aQPixmapCinta);
+}
+
+void QForm1::OnMyClientStateChange(MyClient *obj, MYCLIENTSTATE aNewState)
+{
+    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+        if(obj->GetPeerAddress()==MyTCPClientsList.at(i)->GetPeerAddress() &&
+            obj->GetPeerPort()==MyTCPClientsList.at(i)->GetPeerPort()){
+            switch((uint32_t)aNewState){
+            case MYCLIENTSTATE::MYCLIENT_SETNAME:
+                ui->tableWidget->item(i, 0)->setText(obj->GetNameClient());
+                break;
+            case MYCLIENTSTATE::MYCLIENT_STARTED:
+                ui->tableWidget->item(i, 4)->setText("STOP");
+                break;
+            case MYCLIENTSTATE::MYCLIENT_STOPED:
+                ui->tableWidget->item(i, 4)->setText("START");
+                break;
+            case MYCLIENTSTATE::MYCLIENT_NEWVCINTA:
+                ui->tableWidget->item(i, 4)->setText(QString().asprintf("%0.2f", obj->GetVCinta()));
+                break;
+            }
+            break;
+        }
+    }
 }
 
 // void QForm1::OnQTcpClientTxData()
@@ -382,6 +407,7 @@ MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket):QThread(parent)
     pixelsTime = 1;
     cintaStarted = false;
     outputsDrawed = false;
+    nameClient = "NMCLIENT";
 
     memset(nBoxes, 0, sizeof(nBoxes));
 
@@ -442,19 +468,11 @@ void MyClient::SetClientWidget(QWidget *aClientWidget)
 
 void MyClient::SetVCinta(float v)
 {
-    _uWork w;
     vCinta = v;
     pixelsTime = floor(v) + 1;
     timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
 
     boxTimeAux = 100/pixelsTime;
-
-    w.u32 = vCinta * 10;
-    tx[7] = w.u8[0];
-    tx[8] = w.u8[1];
-    tx[9] = w.u8[2];
-    tx[10] = w.u8[3];
-    SendCMD(&tx[7], 0x5E, 5);
 
     qDebug() << QString().asprintf("pxTime: %d, tPx: %d, boxTime: %d", pixelsTime, timePixels, boxTimeAux);
 
@@ -471,6 +489,7 @@ float MyClient::GetVCinta()
 
 void MyClient::StartCinta(float v)
 {
+    _uWork w;
     vCinta = v;
     pixelsTime = floor(v) + 1;
     timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
@@ -479,6 +498,21 @@ void MyClient::StartCinta(float v)
     boxTime = 2000/timePixels;
 
     qDebug() << QString().asprintf("pxTime: %d, tPx: %d, boxTime: %d, v: %0.1f", pixelsTime, timePixels, boxTimeAux, vCinta);
+
+
+    w.u32 = vCinta*10;
+    tx[7] = w.u8[0];
+    tx[8] = w.u8[1];
+    tx[9] = w.u8[2];
+    tx[10] = w.u8[3];
+    for(int i=0; i<3; i++){
+        tx[11+i*3] = boxOutput[i].boxType;
+        w.u16[0] = boxOutput[i].xPos-8;
+        tx[12+i*3] = w.u8[0];
+        tx[13+i*3] = w.u8[1];
+    }
+    SendCMD(&tx[7], 0x50, 14);
+
 
     cintaStarted = true;
     this->killTimer(timerId);
@@ -491,6 +525,9 @@ void MyClient::StopCinta()
     cintaStarted = false;
     this->killTimer(timerId);
     timerId = this->startTimer(10);
+
+    tx[7] = 0x0D;
+    SendCMD(&tx[7], 0x51, 2);
 }
 
 void MyClient::ResetCinta()
@@ -518,6 +555,9 @@ void MyClient::ResetCinta()
 
     memset(nBoxes, 0, sizeof(nBoxes));
 
+    tx[7] = 0x0D;
+    SendCMD(&tx[7], 0x53, 2);
+
     DrawCinta(0);
     emit MyClientUpdateWidget(clientWidget, QPixmapCinta);
 }
@@ -525,6 +565,11 @@ void MyClient::ResetCinta()
 uint16_t *MyClient::GetCurrentBoxes()
 {
     return (uint16_t *)nBoxes;
+}
+
+QString MyClient::GetNameClient()
+{
+    return nameClient;
 }
 
 void MyClient::run()
@@ -581,19 +626,19 @@ void MyClient::OnQTimer()
                 tx[7] = boxes.last()->boxType;
                 SendCMD(&tx[7], 0x5F, 2);
 
-//                int j;
-//                HEADER[4] = 3;
-//                HEADER[6] = 0x5F;
-//                tx[7] = boxes.last()->boxType;
-//                cks = 0;
-//                for (j = 0; j < 8; ++j) {
-//                    if(j < 7)
-//                        tx[j] = HEADER[j];
-//                    cks ^= tx[j];
-//                }
-//                tx[j] = cks;
+                // int i;
+                // HEADER[4] = 3;
+                // HEADER[6] = 0x5F;
+                // tx[7] = boxes.last()->boxType;
+                // cks = 0;
+                // for (i = 0; i < 8; ++i) {
+                //     if(i < 7)
+                //         tx[i] = HEADER[i];
+                //     cks ^= tx[i];
+                // }
+                // tx[i] = cks;
 
-//                client->write((char *)tx, 9);
+                // client->write((char *)tx, 9);
             }
 
             DrawCinta(angle);
@@ -620,6 +665,12 @@ void MyClient::OnQTcpClientTxData()
             if(HEADER[header] == buf[i]){
                 header++;
                 timeout = 10;
+            }
+            else{
+                if(HEADERNMANE[header] == buf[i]){
+                    header = 101;
+                    timeout = 10;
+                }
             }
             break;
         case 1:
@@ -651,6 +702,28 @@ void MyClient::OnQTcpClientTxData()
                     DecodeCMD();
             }
             break;
+        case 101:
+        case 102:
+        case 103:
+        case 104:
+        case 105:
+            if(HEADERNMANE[header-100] == buf[i]){
+                header++;
+                nBytes = 10;
+                nameClient = "";
+            }
+            break;
+        case 106:
+            nBytes--;
+            if(nBytes==0 || buf[i]=='\0'){
+                header = 0;
+                emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_SETNAME);
+            }
+            else
+                nameClient = nameClient + QString((char)buf[i]);
+            break;
+        default:
+            header = 0;
         }
     }
 }
@@ -667,7 +740,7 @@ void MyClient::timerEvent(QTimerEvent *event)
 
 void MyClient::DecodeCMD()
 {
-    uint8_t length, cks, i;
+    uint8_t length;
     _uWork w;
     bool stateBox;
 
@@ -681,19 +754,26 @@ void MyClient::DecodeCMD()
         tx[10] = w.u8[3];
         for(int i=0; i<3; i++){
             tx[11+i*3] = boxOutput[i].boxType;
-            w.u16[0] = boxOutput[i].xPos+10;
+            w.u16[0] = boxOutput[i].xPos-8;
             tx[12+i*3] = w.u8[0];
             tx[13+i*3] = w.u8[1];
         }
-        length = 14;
-        if(!cintaStarted)
+        if(!cintaStarted){
             StartCinta(vCinta);
+            emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_STARTED);
+        }
+        else
+            length = 14;
+        break;
+    case 0x51://STOP CINTA
+        StopCinta();
+        emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_RESETCINTA);
         break;
     case 0x52://DROP BOX
         w.u8[0] = rx[1];
         tx[7] = 0x0A;
         stateBox = false;
-        for(int i=0; i<boxes.count(); i++){
+        for(int i=0; i<boxes.count() && cintaStarted; i++){
             if(boxes.at(i)->boxType==w.u8[0]){
                 stateBox = false;
                 if(boxOutput[0].boxType==w.u8[0])
@@ -713,15 +793,19 @@ void MyClient::DecodeCMD()
         length = 2;
         break;
     case 0x53://RESET CINTA
-        if(cintaStarted)
+        if(cintaStarted || QPixmapCinta==nullptr){
+            length = 2;
             tx[7] = 0x0A;
+        }
         else{
             ResetCinta();
-            tx[7] = 0x0D;
+            emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_RESETCINTA);
         }
-        length = 2;
         break;
-    case 0x51://STOP CINTA
+    case 0x54://CHANGE V CINTA
+        SetVCinta(rx[1]/10.0);
+        emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_NEWVCINTA);
+        break;
     case 0xF0:
         tx[7] = 0x0D;
         length = 2;
@@ -730,19 +814,20 @@ void MyClient::DecodeCMD()
 
     if(length){
         SendCMD(&tx[7], rx[0], length);
-//        HEADER[4] = length + 1;
-//        HEADER[6] = rx[0];
-//        cks = 0;
-//        length += 6;
 
-//        for (i = 0; i < length; ++i) {
-//            if(i < 7)
-//                tx[i] = HEADER[i];
-//            cks ^= tx[i];
-//        }
-//        tx[i] = cks;
+        // HEADER[4] = length + 1;
+        // HEADER[6] = rx[0];
+        // cks = 0;
+        // length += 6;
 
-//        client->write((char *)tx, length+1);
+        // for (i = 0; i < length; ++i) {
+        //     if(i < 7)
+        //         tx[i] = HEADER[i];
+        //     cks ^= tx[i];
+        // }
+        // tx[i] = cks;
+
+        // client->write((char *)tx, length+1);
     }
 
 }
@@ -794,12 +879,19 @@ void MyClient::DrawCinta(int startAngle)
 
     brush.setStyle(Qt::SolidPattern);
     pen.setWidth(1);
+
+    brush.setColor(Qt::red);
+    pen.setColor(Qt::red);
+    paint.setBrush(brush);
+    paint.setPen(pen);
+    paint.drawEllipse(12, 40, 7, 7);
+
     if(!outputsDrawed){
         outputsDrawed = true;
 
-        boxOutput[0].xPos = myRandom.global()->bounded(101) + 200 + 2;
-        boxOutput[1].xPos = myRandom.global()->bounded(101) + 420 + 2;
-        boxOutput[2].xPos = myRandom.global()->bounded(101) + 590 + 2;
+        boxOutput[0].xPos = myRandom.global()->bounded(101) + 200;
+        boxOutput[1].xPos = myRandom.global()->bounded(101) + 420;
+        boxOutput[2].xPos = myRandom.global()->bounded(101) + 590;
         boxOutput[0].boxType = 5+myRandom.global()->bounded(3)*3;
         for(int i=1; i<3; i++){
             boxOutput[i].boxType = 5+myRandom.global()->bounded(3)*3;
@@ -868,20 +960,21 @@ void MyClient::AddBoxToCinta()
 
 void MyClient::SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length)
 {
-    int j;
+    int i;
 
     HEADER[4] = length + 1;
     HEADER[6] = cmdID;
-    length += 6;
     cks = 0;
-    for (j = 0; j < length; ++j) {
-        if(j < 7)
-            tx[j] = HEADER[j];
+    length += 6;
+
+    for (i = 0; i < length; ++i) {
+        if(i < 7)
+            tx[i] = HEADER[i];
         else
-            tx[j] = buf[7-j];
-        cks ^= tx[j];
+            tx[i] = buf[i-7];
+        cks ^= tx[i];
     }
-    tx[j] = cks;
+    tx[i] = cks;
 
     client->write((char *)tx, length+1);
 
