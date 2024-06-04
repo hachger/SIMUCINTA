@@ -108,6 +108,7 @@ public:
     void StopCinta();
     void ResetCinta();
     uint16_t *GetCurrentBoxes();
+    QString GetNameClient();
 
 private slots:
     void OnQTimer();
@@ -122,6 +123,9 @@ private:
     QWidget *clientWidget;
 
     uint8_t HEADER[7] = {'U', 'N', 'E', 'R', 0x00, ':', 0x00};
+    uint8_t HEADERNMANE[6] = {'+', '&', 'N', 'M', 'C', '@'};
+
+    QString nameClient;
 
     uint8_t rx[256], tx[256];
     uint8_t header, index, irRead, nBytes, cks, timeout;
@@ -159,6 +163,7 @@ private:
     void DecodeCMD();
     void DrawCinta(int startAngle);
     void AddBoxToCinta();
+    void SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length);
 
 };
 
