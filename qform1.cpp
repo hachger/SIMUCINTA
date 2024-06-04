@@ -442,11 +442,19 @@ void MyClient::SetClientWidget(QWidget *aClientWidget)
 
 void MyClient::SetVCinta(float v)
 {
+    _uWork w;
     vCinta = v;
     pixelsTime = floor(v) + 1;
     timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
 
     boxTimeAux = 100/pixelsTime;
+
+    w.u32 = vCinta * 10;
+    tx[7] = w.u8[0];
+    tx[8] = w.u8[1];
+    tx[9] = w.u8[2];
+    tx[10] = w.u8[3];
+    SendCMD(&tx[7], 0x5E, 5);
 
     qDebug() << QString().asprintf("pxTime: %d, tPx: %d, boxTime: %d", pixelsTime, timePixels, boxTimeAux);
 
@@ -570,19 +578,22 @@ void MyClient::OnQTimer()
 
                 nBoxes[(boxes.last()->boxType-5)/3][0]++;
 
-                int i;
-                HEADER[4] = 3;
-                HEADER[6] = 0x5F;
                 tx[7] = boxes.last()->boxType;
-                cks = 0;
-                for (i = 0; i < 8; ++i) {
-                    if(i < 7)
-                        tx[i] = HEADER[i];
-                    cks ^= tx[i];
-                }
-                tx[i] = cks;
+                SendCMD(&tx[7], 0x5F, 2);
 
-                client->write((char *)tx, 9);
+//                int j;
+//                HEADER[4] = 3;
+//                HEADER[6] = 0x5F;
+//                tx[7] = boxes.last()->boxType;
+//                cks = 0;
+//                for (j = 0; j < 8; ++j) {
+//                    if(j < 7)
+//                        tx[j] = HEADER[j];
+//                    cks ^= tx[j];
+//                }
+//                tx[j] = cks;
+
+//                client->write((char *)tx, 9);
             }
 
             DrawCinta(angle);
@@ -718,19 +729,20 @@ void MyClient::DecodeCMD()
     }
 
     if(length){
-        HEADER[4] = length + 1;
-        HEADER[6] = rx[0];
-        cks = 0;
-        length += 6;
+        SendCMD(&tx[7], rx[0], length);
+//        HEADER[4] = length + 1;
+//        HEADER[6] = rx[0];
+//        cks = 0;
+//        length += 6;
 
-        for (i = 0; i < length; ++i) {
-            if(i < 7)
-                tx[i] = HEADER[i];
-            cks ^= tx[i];
-        }
-        tx[i] = cks;
+//        for (i = 0; i < length; ++i) {
+//            if(i < 7)
+//                tx[i] = HEADER[i];
+//            cks ^= tx[i];
+//        }
+//        tx[i] = cks;
 
-        client->write((char *)tx, length+1);
+//        client->write((char *)tx, length+1);
     }
 
 }
@@ -851,6 +863,27 @@ void MyClient::AddBoxToCinta()
         paint.drawRect(boxes.at(i)->xPos, 45 - (boxes.at(i)->boxType+10), 20, boxes.at(i)->boxType);
     }
 
+
+}
+
+void MyClient::SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length)
+{
+    int j;
+
+    HEADER[4] = length + 1;
+    HEADER[6] = cmdID;
+    length += 6;
+    cks = 0;
+    for (j = 0; j < length; ++j) {
+        if(j < 7)
+            tx[j] = HEADER[j];
+        else
+            tx[j] = buf[7-j];
+        cks ^= tx[j];
+    }
+    tx[j] = cks;
+
+    client->write((char *)tx, length+1);
 
 }
 

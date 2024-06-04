@@ -12,6 +12,7 @@
 #include <QDebug>
 #include <QRandomGenerator>
 
+
 typedef union{
     uint8_t     u8[4];
     int8_t      i8[4];
@@ -159,6 +160,7 @@ private:
     void DecodeCMD();
     void DrawCinta(int startAngle);
     void AddBoxToCinta();
+    void SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length);
 
 };
 
