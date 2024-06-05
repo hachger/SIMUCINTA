@@ -23,6 +23,14 @@ FORMS += \
     qform1.ui \
     qserialsetup.ui
 
+RC_ICONS = Dragon.ico
+
+VERSION = 1.0.0.11
+QMAKE_TARGET_COMPANY = HGE
+QMAKE_TARGET_PRODUCT = SIMUCINTA
+QMAKE_TARGET_DESCRIPTION =
+QMAKE_TARGET_COPYRIGHT = HGE
+
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin

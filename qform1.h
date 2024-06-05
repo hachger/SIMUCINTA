@@ -93,6 +93,7 @@ private:
     QTcpServer *QTcpServer1;
     //    QList<QTcpSocket *> MyTCPClientsList;
     QList<MyClient *> MyTCPClientsList;
+    void SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length);
 };
 
 
@@ -141,6 +142,7 @@ private:
     uint8_t rx[256], tx[256];
     uint8_t header, index, irRead, nBytes, cks, timeout;
     QTcpSocket *client;
+    QSerialPort *clientSerial;
     QTimer *timer;
     QPixmap *QPixmapCinta;
     QPixmap *QPixmapBoxes;

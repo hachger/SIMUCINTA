@@ -51,7 +51,7 @@ QForm1::~QForm1()
 void QForm1::DecodeCMD()
 {
 
-    uint8_t length, cks, i;
+    uint8_t length;
 
     length = 0;
     switch(rx[0]){
@@ -62,21 +62,31 @@ void QForm1::DecodeCMD()
     }
 
     if(length){
-        HEADER[4] = length + 1;
-        HEADER[6] = rx[0];
-        cks = 0;
-        length += 7;
-
-        for (i = 0; i < length; ++i) {
-            if(i < 7)
-                tx[i] = HEADER[i];
-            cks ^= tx[i];
-        }
-        tx[i] = cks;
-
-        if(QSerialPort1->isOpen())
-            QSerialPort1->write((char *)tx, length);
+        SendCMD(&tx[7], rx[0], length);
     }
+
+}
+
+void QForm1::SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length)
+{
+    int i;
+
+    HEADER[4] = length + 1;
+    HEADER[6] = cmdID;
+    cks = 0;
+    length += 6;
+
+    for (i = 0; i < length; ++i) {
+        if(i < 7)
+            tx[i] = HEADER[i];
+        else
+            tx[i] = buf[i];
+        cks ^= tx[i];
+    }
+    tx[i] = cks;
+
+    if(QSerialPort1->isOpen())
+        QSerialPort1->write((char *)tx, length + 1);
 
 }
 
@@ -468,6 +478,8 @@ void MyClient::SetClientWidget(QWidget *aClientWidget)
 
 void MyClient::SetVCinta(float v)
 {
+    _uWork w;
+
     vCinta = v;
     pixelsTime = floor(v) + 1;
     timePixels = floor((1000/(100.0*v)) * pixelsTime + 0.5);
@@ -480,6 +492,12 @@ void MyClient::SetVCinta(float v)
         this->killTimer(timerId);
         timerId = this->startTimer(timePixels);
     }
+
+    w.u32 = vCinta*10;
+    tx[7] = w.u8[0];
+    tx[8] = 0x0D;
+    SendCMD(&tx[7], 0x54, 3);
+
 }
 
 float MyClient::GetVCinta()
@@ -489,6 +507,9 @@ float MyClient::GetVCinta()
 
 void MyClient::StartCinta(float v)
 {
+    if(cintaStarted)
+        return;
+
     _uWork w;
     vCinta = v;
     pixelsTime = floor(v) + 1;
@@ -502,21 +523,19 @@ void MyClient::StartCinta(float v)
 
     w.u32 = vCinta*10;
     tx[7] = w.u8[0];
-    tx[8] = w.u8[1];
-    tx[9] = w.u8[2];
-    tx[10] = w.u8[3];
     for(int i=0; i<3; i++){
-        tx[11+i*3] = boxOutput[i].boxType;
+        tx[8+i*3] = boxOutput[i].boxType;
         w.u16[0] = boxOutput[i].xPos-8;
-        tx[12+i*3] = w.u8[0];
-        tx[13+i*3] = w.u8[1];
+        tx[9+i*3] = w.u8[0];
+        tx[10+i*3] = w.u8[1];
     }
-    SendCMD(&tx[7], 0x50, 14);
+    SendCMD(&tx[7], 0x50, 11);
 
 
     cintaStarted = true;
     this->killTimer(timerId);
     timerId = this->startTimer(timePixels);
+    // emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_STARTED);
 
 }
 
@@ -528,6 +547,7 @@ void MyClient::StopCinta()
 
     tx[7] = 0x0D;
     SendCMD(&tx[7], 0x51, 2);
+    // emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_STOPED);
 }
 
 void MyClient::ResetCinta()
@@ -749,21 +769,18 @@ void MyClient::DecodeCMD()
     case 0x50://START CINTA
         w.u32 = vCinta*10;
         tx[7] = w.u8[0];
-        tx[8] = w.u8[1];
-        tx[9] = w.u8[2];
-        tx[10] = w.u8[3];
         for(int i=0; i<3; i++){
-            tx[11+i*3] = boxOutput[i].boxType;
-            w.u16[0] = boxOutput[i].xPos-8;
-            tx[12+i*3] = w.u8[0];
-            tx[13+i*3] = w.u8[1];
+            tx[8+i*3] = boxOutput[i].boxType;
+            w.u16[0] = boxOutput[i].xPos+11;
+            tx[9+i*3] = w.u8[0];
+            tx[10+i*3] = w.u8[1];
         }
         if(!cintaStarted){
             StartCinta(vCinta);
             emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_STARTED);
         }
         else
-            length = 14;
+            length = 11;
         break;
     case 0x51://STOP CINTA
         StopCinta();
@@ -805,6 +822,8 @@ void MyClient::DecodeCMD()
     case 0x54://CHANGE V CINTA
         SetVCinta(rx[1]/10.0);
         emit MyClientStateChange(this, MYCLIENTSTATE::MYCLIENT_NEWVCINTA);
+        tx[7] = 0x0D;
+        length = 2;
         break;
     case 0xF0:
         tx[7] = 0x0D;
@@ -814,20 +833,6 @@ void MyClient::DecodeCMD()
 
     if(length){
         SendCMD(&tx[7], rx[0], length);
-
-        // HEADER[4] = length + 1;
-        // HEADER[6] = rx[0];
-        // cks = 0;
-        // length += 6;
-
-        // for (i = 0; i < length; ++i) {
-        //     if(i < 7)
-        //         tx[i] = HEADER[i];
-        //     cks ^= tx[i];
-        // }
-        // tx[i] = cks;
-
-        // client->write((char *)tx, length+1);
     }
 
 }
@@ -884,7 +889,7 @@ void MyClient::DrawCinta(int startAngle)
     pen.setColor(Qt::red);
     paint.setBrush(brush);
     paint.setPen(pen);
-    paint.drawEllipse(12, 40, 7, 7);
+    paint.drawEllipse(9, 40, 7, 7);
 
     if(!outputsDrawed){
         outputsDrawed = true;
@@ -903,8 +908,8 @@ void MyClient::DrawCinta(int startAngle)
             }
         }
 
-        qDebug() << QString().asprintf("x1:%d, x2:%d, x3:%d", boxOutput[0].xPos, boxOutput[1].xPos, boxOutput[2].xPos);
-        qDebug() << QString().asprintf("t1:%d, t2:%d, t3:%d", boxOutput[0].boxType, boxOutput[1].boxType, boxOutput[2].boxType);
+        qDebug() << QString().asprintf("x1:%d, x2:%d, x3:%d", boxOutput[0].xPos+11, boxOutput[1].xPos+11, boxOutput[2].xPos+11);
+        qDebug() << QString().asprintf("box1:%d, box2:%d, box3:%d", boxOutput[0].boxType, boxOutput[1].boxType, boxOutput[2].boxType);
     }
     for(int i=0; i<3; i++){
         switch(boxOutput[i].boxType){
@@ -926,6 +931,13 @@ void MyClient::DrawCinta(int startAngle)
         paint.drawRoundedRect(boxOutput[i].xPos, 38, 40, 10, 3.0, 3.0, Qt::AbsoluteSize);
     }
 
+    brush.setColor(Qt::red);
+    pen.setColor(Qt::red);
+    paint.setBrush(brush);
+    paint.setPen(pen);
+    for (int i = 109; i < QPixmapCinta->width(); i+=100) {
+        paint.drawRect(i-1, 44, 3, 3);
+    }
 
 
 
@@ -982,20 +994,24 @@ void MyClient::SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length)
 
 void QForm1::on_pushButton_4_clicked()
 {
+    bool ok;
+    float v;
+
     if(ui->pushButton_4->text() == "START"){
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-            bool ok;
-            float v = ui->lineEdit_3->text().toFloat(&ok);
+            v = ui->lineEdit_3->text().toFloat(&ok);
             if(!ok)
                 v = 0.5;
             ui->tableWidget->item(i, 3)->setText(QString().asprintf("%0.2f", v));
-            MyTCPClientsList.at(i)->StartCinta(0.5);
+            ui->tableWidget->item(i, 4)->setText("STOP");
+            MyTCPClientsList.at(i)->StartCinta(v);
         }
         ui->pushButton_4->setText("STOP");
     }
     else{
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
             MyTCPClientsList.at(i)->StopCinta();
+            ui->tableWidget->item(i, 4)->setText("START");
         }
         ui->pushButton_4->setText("START");
 
@@ -1005,9 +1021,11 @@ void QForm1::on_pushButton_4_clicked()
 
 void QForm1::on_pushButton_5_clicked()
 {
+    bool ok;
+    float v;
+
     for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-        bool ok;
-        float v = ui->lineEdit_3->text().toFloat(&ok);
+        v = ui->lineEdit_3->text().toFloat(&ok);
         if(!ok)
             v = 0.5;
         ui->tableWidget->item(i, 3)->setText(QString().asprintf("%0.2f", v));
