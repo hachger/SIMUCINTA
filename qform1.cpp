@@ -12,7 +12,7 @@ QForm1::QForm1(QWidget *parent)
     qApp->setStyle("Fusion");
 
     QSerialPort1 = new QSerialPort(this);
-    connect(QSerialPort1, &QSerialPort::readyRead, this, &QForm1::OnQSerialPort1);
+//    connect(QSerialPort1, &QSerialPort::readyRead, this, &QForm1::OnQSerialPort1);
 
     QSerialSetup1 = new QSerialSetup(this, QSerialPort1);
 
@@ -39,11 +39,12 @@ QForm1::~QForm1()
 {
     if(QTcpServer1->isListening()){
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-            MyTCPClientsList.at(i)->GetClient()->close();
+            if(MyTCPClientsList.at(i)->GetClient() != nullptr)
+                MyTCPClientsList.at(i)->GetClient()->close();
         }
         QTcpServer1->close();
-        MyTCPClientsList.clear();
     }
+    MyTCPClientsList.clear();
 
     delete ui;
 }
@@ -160,7 +161,7 @@ void QForm1::OnQTcpServer1ClientConnect()
 
     // aux->client = QTcpServer1->nextPendingConnection();
 
-    aux = new MyClient(nullptr, QTcpServer1->nextPendingConnection());
+    aux = new MyClient(nullptr, QTcpServer1->nextPendingConnection(), nullptr);
 
     MyTCPClientsList.append(aux);
 
@@ -222,8 +223,9 @@ void QForm1::OnMyClientDisconnect(QTcpSocket *aClient){
     clientID = clientID +  QString().number(aClient->peerPort(),10);
 
     for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-        if(MyTCPClientsList.at(i)->GetPeerAddress()==aClient->peerAddress() &&
+        if(MyTCPClientsList.at(i)->GetClient()!=nullptr && MyTCPClientsList.at(i)->GetPeerAddress()==aClient->peerAddress() &&
             MyTCPClientsList.at(i)->GetPeerPort()==aClient->peerPort()){
+            MyTCPClientsList.at(i)->StopCinta();
             MyTCPClientsList.at(i)->terminate();
             while(!MyTCPClientsList.at(i)->wait());
             delete MyTCPClientsList.takeAt(i);
@@ -251,23 +253,31 @@ void QForm1::OnMyClientUpdateWidget(QWidget *aClientWidget, QPixmap *aQPixmapCin
 
 void QForm1::OnMyClientStateChange(MyClient *obj, MYCLIENTSTATE aNewState)
 {
-    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-        if(obj->GetPeerAddress()==MyTCPClientsList.at(i)->GetPeerAddress() &&
-            obj->GetPeerPort()==MyTCPClientsList.at(i)->GetPeerPort()){
-            switch((uint32_t)aNewState){
-            case MYCLIENTSTATE::MYCLIENT_SETNAME:
-                ui->tableWidget->item(i, 0)->setText(obj->GetNameClient());
-                break;
-            case MYCLIENTSTATE::MYCLIENT_STARTED:
-                ui->tableWidget->item(i, 4)->setText("STOP");
-                break;
-            case MYCLIENTSTATE::MYCLIENT_STOPED:
-                ui->tableWidget->item(i, 4)->setText("START");
-                break;
-            case MYCLIENTSTATE::MYCLIENT_NEWVCINTA:
-                ui->tableWidget->item(i, 4)->setText(QString().asprintf("%0.2f", obj->GetVCinta()));
+    int i;
+
+    for (i = 0; i < MyTCPClientsList.count(); ++i) {
+        if(obj->GetClient() != nullptr){
+            if(obj->GetPeerAddress()==MyTCPClientsList.at(i)->GetPeerAddress() &&
+                obj->GetPeerPort()==MyTCPClientsList.at(i)->GetPeerPort()){
                 break;
             }
+        }
+        break;
+    }
+
+    if(i != MyTCPClientsList.count()){
+        switch((uint32_t)aNewState){
+        case MYCLIENTSTATE::MYCLIENT_SETNAME:
+            ui->tableWidget->item(i, 0)->setText(obj->GetNameClient());
+            break;
+        case MYCLIENTSTATE::MYCLIENT_STARTED:
+            ui->tableWidget->item(i, 4)->setText("STOP");
+            break;
+        case MYCLIENTSTATE::MYCLIENT_STOPED:
+            ui->tableWidget->item(i, 4)->setText("START");
+            break;
+        case MYCLIENTSTATE::MYCLIENT_NEWVCINTA:
+            ui->tableWidget->item(i, 4)->setText(QString().asprintf("%0.2f", obj->GetVCinta()));
             break;
         }
     }
@@ -354,9 +364,29 @@ void QForm1::on_pushButton_clicked()
 {
     if(QSerialPort1->isOpen()){
         QSerialPort1->close();
+
+        for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+            if(MyTCPClientsList.at(i)->GetClient()==nullptr){
+                MyTCPClientsList.at(i)->terminate();
+                while(!MyTCPClientsList.at(i)->wait());
+                delete MyTCPClientsList.takeAt(i);
+                break;
+            }
+        }
+
+        for(int i=0; i<ui->tableWidget->rowCount(); i++){
+            if(ui->tableWidget->item(i, 1)->text().contains("SERIAL")){
+                ui->tableWidget->removeRow(i);
+                break;
+            }
+        }
+
+
+        ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
         ui->pushButton_2->setText("OPEN");
     }
 
+    QSerialSetup1->getAvailablePorts();
     QSerialSetup1->exec();
     ui->lineEdit->setText(QSerialSetup1->_PortName);
 }
@@ -366,11 +396,76 @@ void QForm1::on_pushButton_2_clicked()
 {
     if(QSerialPort1->isOpen()){
         QSerialPort1->close();
+        for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+            if(MyTCPClientsList.at(i)->GetClient()==nullptr){
+                MyTCPClientsList.at(i)->terminate();
+                while(!MyTCPClientsList.at(i)->wait());
+                delete MyTCPClientsList.takeAt(i);
+                break;
+            }
+        }
+
+        for(int i=0; i<ui->tableWidget->rowCount(); i++){
+            if(ui->tableWidget->item(i, 1)->text().contains("SERIAL")){
+                ui->tableWidget->removeRow(i);
+                break;
+            }
+        }
+
+        ui->label->setText(QString().asprintf("CLIENTS (%04d)", (int)MyTCPClientsList.count()));
         ui->pushButton_2->setText("OPEN");
     }
     else{
-        if(QSerialPort1->open(QSerialPort::ReadWrite))
+        if(QSerialPort1->open(QSerialPort::ReadWrite)){
+            int row;
+            float f;
+            bool ok;
+
+            MyClient *aux = new MyClient(nullptr, nullptr, QSerialPort1);
+            MyTCPClientsList.append(aux);
+
+            row = ui->tableWidget->rowCount();
+
+            ui->tableWidget->setRowCount(row+1);
+            ui->tableWidget->setRowHeight(row, 100);
+            ui->tableWidget->setItem(row, 0, new QTableWidgetItem("NAME"));
+            ui->tableWidget->item(row, 0)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget->setItem(row, 1, new QTableWidgetItem("SERIAL: "+QSerialPort1->portName()));
+            ui->tableWidget->item(row, 1)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget->setItem(row, 3, new QTableWidgetItem(""));
+            ui->tableWidget->item(row, 3)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget->setItem(row, 4, new QTableWidgetItem("START"));
+            ui->tableWidget->item(row, 4)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget->item(row, 4)->setFlags(Qt::NoItemFlags | Qt::ItemIsEnabled);
+
+            QLabel *lb = new QLabel;
+            lb->setAlignment(Qt::AlignCenter);
+            ui->tableWidget->setCellWidget(row, 2, lb);
+
+            MyTCPClientsList.last()->SetClientWidget(ui->tableWidget->cellWidget(row, 2));
+
+
+            connect(aux, &MyClient::MyClientUpdateWidget, this, &QForm1::OnMyClientUpdateWidget);
+            MyTCPClientsList.last()->SetWidget(ui->tableWidget->columnWidth(2)-10, 80);
+            f = ui->lineEdit_3->text().toFloat(&ok);
+            if(!ok)
+                f = 1.0;
+            else{
+                if(f > 3.0f)
+                    f = 1.0;
+            }
+            if(ui->pushButton_4->text()=="STOP"){
+                ui->tableWidget->item(row, 3)->setText(QString().asprintf("%0.2f", f));
+                MyTCPClientsList.last()->StartCinta(f);
+                ui->tableWidget->item(row, 4)->setText("STOP");
+            }
+            else{
+                MyTCPClientsList.last()->SetVCinta(f);
+                ui->tableWidget->item(row, 3)->setText(QString().asprintf("%0.2f", f));
+            }
+
             ui->pushButton_2->setText("CLOSE");
+        }
     }
 }
 
@@ -382,11 +477,13 @@ void QForm1::on_pushButton_3_clicked()
 
     if(QTcpServer1->isListening()){
         for (int i = 0; i < MyTCPClientsList.count(); ++i) {
-            MyTCPClientsList.at(0)->GetClient()->close();
-            i--;
+            if(MyTCPClientsList.at(i)->GetClient() != nullptr){
+                MyTCPClientsList.at(i)->GetClient()->close();
+                i--;
+            }
         }
         QTcpServer1->close();
-        MyTCPClientsList.clear();
+//        MyTCPClientsList.clear();
         ui->pushButton_3->setText("TCP OPEN");
         return;
     }
@@ -406,9 +503,10 @@ void QForm1::on_pushButton_3_clicked()
 }
 
 
-MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket):QThread(parent)
+MyClient::MyClient(QObject *parent, QTcpSocket *clientSocket, QSerialPort *serialPort):QThread(parent)
 {
     client = clientSocket;
+    clientSerial = serialPort;
     irRead = 0;
     header = 0;
     QPixmapCinta = nullptr;
@@ -594,10 +692,16 @@ QString MyClient::GetNameClient()
 
 void MyClient::run()
 {
-    client->moveToThread(this->thread());
-    connect(client, &QIODevice::readyRead, this, &MyClient::OnQTcpClientTxData);
-    client->moveToThread(this->thread());
-    connect(client, &QTcpSocket::disconnected, this, &MyClient::OnTcpClientDisconnect);
+    if(client != nullptr){
+        client->moveToThread(this->thread());
+        connect(client, &QIODevice::readyRead, this, &MyClient::OnQTcpClientTxData);
+        connect(client, &QTcpSocket::disconnected, this, &MyClient::OnTcpClientDisconnect);
+    }
+
+    if(clientSerial != nullptr){
+        clientSerial->moveToThread(this->thread());
+        connect(clientSerial, &QIODevice::readyRead, this, &MyClient::OnQTcpClientTxData);
+    }
 
 //    timer = new QTimer();
 //    connect(timer, &QTimer::timeout, this, &MyClient::OnQTimer);
@@ -988,7 +1092,10 @@ void MyClient::SendCMD(uint8_t *buf, uint8_t cmdID, uint8_t length)
     }
     tx[i] = cks;
 
-    client->write((char *)tx, length+1);
+    if(client != nullptr)
+        client->write((char *)tx, length+1);
+    if(clientSerial != nullptr)
+        clientSerial->write((char *)tx, length+1);
 
 }
 

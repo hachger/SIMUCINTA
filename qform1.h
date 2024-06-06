@@ -104,7 +104,7 @@ class MyClient : public QThread
 protected:
     void run() override;
 public:
-    MyClient(QObject *parent=nullptr, QTcpSocket *clientSocket = nullptr);
+    MyClient(QObject *parent=nullptr, QTcpSocket *clientSocket = nullptr, QSerialPort *serialPort = nullptr);
     ~MyClient();
 
     QHostAddress GetPeerAddress();
