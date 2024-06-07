@@ -96,59 +96,65 @@ void QForm1::OnQTimer1()
 
 }
 
-void QForm1::OnQSerialPort1()
-{
-    int count = QSerialPort1->bytesAvailable();
-    if(count <= 0)
-        return;
+// void QForm1::OnQSerialPort1()
+// {
+//     int count = QSerialPort1->bytesAvailable();
+//     if(count <= 0)
+//         return;
 
-    uint8_t *buf = new uint8_t[count];
-    QSerialPort1->read((char *)buf, count);
-    for (int i = 0; i < count; ++i) {
-        switch(header){
-        case 0:
-            if(HEADER[header] == buf[i]){
-                header++;
-                timeout = 10;
-            }
-            break;
-        case 1:
-        case 2:
-        case 3:
-        case 5:
-            if(HEADER[header] == buf[i])
-                header++;
-            else{
-                header = 0;
-                i--;
-            }
-            break;
-        case 4:
-            nBytes = buf[i];
-            cks = 'U' ^ 'N' ^ 'E' ^ 'R' ^ nBytes ^ ':';
-            index = 0;
-            header = 5;
-            break;
-        case 6:
-            nBytes--;
-            if(nBytes){
-                rx[index++] = buf[i];
-                cks ^= buf[i];
-            }
-            else{
-                header = 0;
-                if(cks == buf[i])
-                    DecodeCMD();
-            }
-            break;
-        }
-    }
-}
+//     uint8_t *buf = new uint8_t[count];
+//     QSerialPort1->read((char *)buf, count);
+//     for (int i = 0; i < count; ++i) {
+//         switch(header){
+//         case 0:
+//             if(HEADER[header] == buf[i]){
+//                 header++;
+//                 timeout = 10;
+//             }
+//             break;
+//         case 1:
+//         case 2:
+//         case 3:
+//         case 5:
+//             if(HEADER[header] == buf[i])
+//                 header++;
+//             else{
+//                 header = 0;
+//                 i--;
+//             }
+//             break;
+//         case 4:
+//             nBytes = buf[i];
+//             cks = 'U' ^ 'N' ^ 'E' ^ 'R' ^ nBytes ^ ':';
+//             index = 0;
+//             header = 5;
+//             break;
+//         case 6:
+//             nBytes--;
+//             if(nBytes){
+//                 rx[index++] = buf[i];
+//                 cks ^= buf[i];
+//             }
+//             else{
+//                 header = 0;
+//                 if(cks == buf[i])
+//                     DecodeCMD();
+//             }
+//             break;
+//         }
+//     }
+// }
 
 void QForm1::OnQTcpServer1Error()
 {
+    for (int i = 0; i < MyTCPClientsList.count(); ++i) {
+        if(MyTCPClientsList.at(i)->GetClient() != nullptr){
+            MyTCPClientsList.at(i)->GetClient()->close();
+            i--;
+        }
+    }
     QTcpServer1->close();
-    ui->pushButton->setText("OPEN");
+    ui->pushButton_3->setText("TCP OPEN");
 }
 
 void QForm1::OnQTcpServer1ClientConnect()

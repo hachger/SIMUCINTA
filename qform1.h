@@ -50,7 +50,7 @@ public:
 private slots:
     // bool eventFilter(QObject *object, QEvent *event) override;
     void OnQTimer1();
-    void OnQSerialPort1();
+    // void OnQSerialPort1();
     // void resizeEvent(QResizeEvent *event) override;
 
     void OnQTcpServer1Error();
